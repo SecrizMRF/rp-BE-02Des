@@ -1,4 +1,4 @@
-const pool = require('../db');
+const { query, pool } = require('../db');
 const { uploadFile, deleteFile } = require('../services/fileService');
 const { validationResult } = require('express-validator');
 
@@ -33,7 +33,7 @@ const itemController = {
       }
 
       // Create item in database
-      const result = await pool.query(
+      const result = await query(
         `INSERT INTO items 
         (type, name, location, date, description, status, contact, photo, reporter)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -62,7 +62,7 @@ const itemController = {
       const pageNum = parseInt(page) || 1;
       const offset = (pageNum - 1) * limitNum;
       
-      let query = `
+      let sqlQuery = `
         SELECT i.*, u.username as reporter_name, u.email as reporter_email
         FROM items i
         LEFT JOIN users u ON i.reporter::text = u.username::text
@@ -74,29 +74,29 @@ const itemController = {
 
       // Add type filter
       if (type !== 'all') {
-        query += ` AND i.type = $${paramCount++}`;
+        sqlQuery += ` AND i.type = $${paramCount++}`;
         queryParams.push(type);
       }
 
       // Add status filter
       if (status !== 'all') {
-        query += ` AND i.status = $${paramCount++}`;
+        sqlQuery += ` AND i.status = $${paramCount++}`;
         queryParams.push(status);
       }
 
       // Add search filter
       if (search) {
-        query += ` AND (i.name ILIKE $${paramCount} OR i.description ILIKE $${paramCount})`;
+        sqlQuery += ` AND (i.name ILIKE $${paramCount} OR i.description ILIKE $${paramCount})`;
         queryParams.push(`%${search}%`);
         paramCount++;
       }
 
       // Add pagination
-      query += ` ORDER BY i.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+      sqlQuery += ` ORDER BY i.created_at DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
       queryParams.push(limitNum, offset);
 
       // Get total count for pagination
-      const countQuery = `
+      const countQueryStr = `
         SELECT COUNT(*) 
         FROM items i
         WHERE 1=1 
@@ -109,8 +109,8 @@ const itemController = {
       if (status !== 'all') countParams.push(status);
 
       const [itemsResult, countResult] = await Promise.all([
-        pool.query(query, queryParams),
-        pool.query(countQuery, countParams)
+        query(sqlQuery, queryParams),
+        query(countQueryStr, countParams)
       ]);
 
       const totalItems = parseInt(countResult.rows[0].count);
@@ -137,7 +137,7 @@ const itemController = {
     try {
       const { id } = req.params;
       
-      const result = await pool.query(
+      const result = await query(
         `SELECT i.*, u.username as reporter_name, u.email as reporter_email
          FROM items i
          LEFT JOIN users u ON i.reporter::text = u.username::text
@@ -172,7 +172,7 @@ const itemController = {
       }
 
       // Check if item exists and user is the owner
-      const itemResult = await pool.query(
+      const itemResult = await query(
         'SELECT * FROM items WHERE id = $1',
         [id]
       );
@@ -188,7 +188,7 @@ const itemController = {
         return res.status(403).json({ message: 'Not authorized to update this item' });
       }
 
-      const result = await pool.query(
+      const result = await query(
         'UPDATE items SET status = $1 WHERE id = $2 RETURNING *',
         [status, id]
       );
@@ -215,7 +215,7 @@ const itemController = {
       console.log('User info:', req.user);
 
       // Check if item exists
-      const itemResult = await pool.query(
+      const itemResult = await query(
         'SELECT * FROM items WHERE id = $1',
         [id]
       );
@@ -260,7 +260,7 @@ const itemController = {
       }
 
       // Update item in database
-      const updateResult = await pool.query(
+      const updateResult = await query(
         `UPDATE items 
         SET type = $1, name = $2, location = $3, date = $4, description = $5, contact = $6, photo = $7
         WHERE id = $8
@@ -292,7 +292,7 @@ const itemController = {
       console.log('Checking if item exists with ID:', id);
 
       // Check if item exists
-      const itemResult = await pool.query(
+      const itemResult = await query(
         'SELECT * FROM items WHERE id = $1',
         [id]
       );
@@ -329,7 +329,7 @@ const itemController = {
       }
 
       console.log('Deleting item from database');
-      await pool.query('DELETE FROM items WHERE id = $1', [id]);
+      await query('DELETE FROM items WHERE id = $1', [id]);
       console.log('Item deleted successfully');
 
       res.json({
@@ -348,7 +348,7 @@ const itemController = {
       const userId = req.user.id;
       const { type = 'all', status = 'all' } = req.query;
 
-      let query = `
+      let sqlQuery = `
         SELECT * FROM items 
         WHERE reporter = $1
       `;
@@ -357,18 +357,18 @@ const itemController = {
       let paramCount = 2;
 
       if (type !== 'all') {
-        query += ` AND type = $${paramCount++}`;
+        sqlQuery += ` AND type = $${paramCount++}`;
         queryParams.push(type);
       }
 
       if (status !== 'all') {
-        query += ` AND status = $${paramCount++}`;
+        sqlQuery += ` AND status = $${paramCount++}`;
         queryParams.push(status);
       }
 
-      query += ' ORDER BY created_at DESC';
+      sqlQuery += ' ORDER BY created_at DESC';
 
-      const result = await pool.query(query, queryParams);
+      const result = await query(sqlQuery, queryParams);
 
       res.json({
         success: true,
