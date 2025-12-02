@@ -13,7 +13,6 @@ const authRoutes = require('./routes/authRoutes');
 const itemRoutes = require('./routes/itemRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 4000;
 
 // Middleware
 const allowedOrigins = [
